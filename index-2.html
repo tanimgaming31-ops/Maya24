@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ZOYA</title>
+<style>
+:root{--bg:#f6f2fb;--surface:#fff;--text:#241b3d;--muted:#6f6591;--accent:#c93d6e;--on-accent:#fff;--line:#e2daf0;--err:#b3261e;--errbg:#fde8e6;--user:#c93d6e;--ai:#fff}
+:root[data-theme="dark"]{--bg:#17132a;--surface:#221c3b;--text:#ede8fa;--muted:#a79ccb;--accent:#ff7a9c;--on-accent:#2a0f1a;--line:#352d58;--err:#ffb4ab;--errbg:#3d1f24;--user:#ff7a9c;--ai:#221c3b}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:16px/1.5 ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+h1{font-size:22px;letter-spacing:.14em;margin:0;flex:1;font-weight:700}
+button{font:inherit;color:inherit;cursor:pointer}
+.ic{background:none;border:1px solid var(--line);border-radius:10px;padding:6px 10px;min-height:38px}
+.ic:focus-visible,#send:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#msgs{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:10px}
+.m{max-width:min(85%,640px);padding:9px 13px;border-radius:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.m.user{align-self:flex-end;background:var(--user);color:var(--on-accent);border-bottom-right-radius:4px}
+.m.ai{align-self:flex-start;background:var(--ai);border:1px solid var(--line);border-bottom-left-radius:4px}
+.m.err{align-self:center;background:var(--errbg);color:var(--err);border-radius:10px;font-size:14px;max-width:min(95%,640px)}
+.m.note{align-self:center;color:var(--muted);font-size:13px;padding:0}
+.empty{margin:auto;text-align:center;color:var(--muted);max-width:30ch}
+.empty b{display:block;color:var(--text);font-size:18px;margin-bottom:4px}
+.dots::after{content:"…";animation:b 1s steps(3) infinite}
+@keyframes b{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.dots::after{animation:none}}
+form{display:flex;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--bg)}
+textarea{flex:1;resize:none;max-height:140px;font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+#send{background:var(--accent);color:var(--on-accent);border:0;border-radius:14px;padding:0 18px;font-weight:700;min-height:44px}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--text);width:min(92vw,440px);padding:18px;max-height:88vh}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+label{display:block;font-weight:600;margin:12px 0 4px}
+input,select{width:100%;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+.hint{font-size:13px;color:var(--muted);margin:4px 0 0}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:6px}
+td{padding:4px 0;border-top:1px solid var(--line);vertical-align:top}
+td:last-child{text-align:right;white-space:nowrap}
+.row{display:flex;gap:8px;margin-top:14px}
+.row button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:none}
+.row .pri{background:var(--accent);color:var(--on-accent);border:0;font-weight:700}
+.credit{text-align:center;color:var(--muted);font-size:13px;margin:14px 0 0}
+.mic{background:none;border:1px solid var(--line);border-radius:14px;padding:0 14px;min-height:44px;font-weight:600}
+.mic.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.vs{padding:6px 14px;font-size:14px;color:var(--muted);border-bottom:1px solid var(--line)}
+#diag{font:12px/1.4 ui-monospace,monospace;max-height:90px;overflow:auto;padding:4px 14px;border-top:1px solid var(--line);color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>ZOYA</h1>
+  <button class="ic" id="theme" aria-label="Switch light or dark appearance">Theme</button>
+  <button class="ic" id="clear" aria-label="Clear conversation">Clear</button>
+  <button class="ic" id="cfg" aria-label="Settings">Settings</button>
+</header>
+<div id="vs" class="vs" role="status" hidden></div>
+<main id="msgs" aria-live="polite"></main>
+<div id="diag" hidden></div>
+<form id="f">
+  <textarea id="t" rows="1" placeholder="Message ZOYA" aria-label="Message"></textarea>
+  <button id="mic" class="mic" type="button" aria-label="Start or stop voice">Mic</button>
+  <button id="send" type="submit">Send</button>
+</form>
+
+<dialog id="d">
+  <h2 style="margin:0">Settings</h2>
+  <label for="key">Gemini API key</label>
+  <input id="key" type="password" autocomplete="off" placeholder="Paste your key">
+  <p class="hint">Saved only in this browser on this device. It is sent only to Google's Gemini API. Get a free key at aistudio.google.com.</p>
+  <label for="model">Model</label>
+  <input id="model" autocomplete="off">
+  <p class="hint">If Google retires this model, enter a current Gemini model name here.</p>
+  <label for="vmodel">Voice model (Gemini Live)</label>
+  <input id="vmodel" autocomplete="off">
+  <p class="hint">Voice needs HTTPS (for example GitHub Pages). Add #dev to the page address to see diagnostics.</p>
+  <label>Feature status</label>
+  <table>
+    <tr><td>Text chat</td><td>🟡 Needs your API key</td></tr>
+    <tr><td>Chat history on this device</td><td>🟡 Needs your test</td></tr>
+    <tr><td>Voice conversation</td><td>🟡 Needs HTTPS + your test</td></tr>
+    <tr><td>Voice tools: time, math, notes, weather, search</td><td>🟡 Needs your test</td></tr>
+    <tr><td>Reminders</td><td>🟠 Only while ZOYA is open</td></tr>
+    <tr><td>Open other apps, Gmail, music, smart home, vision</td><td>🔴 Not implemented</td></tr>
+  </table>
+  <div class="row"><button id="cancel" type="button">Close</button><button id="save" class="pri" type="button">Save</button></div>
+  <p class="credit">Developed by Tanim</p>
+</dialog>
+
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var msgsEl=$('msgs'),t=$('t'),send=$('send'),d=$('d');
+  var DEFAULT_MODEL='gemini-2.5-flash';
+  var SYSTEM='You are ZOYA, a warm, helpful assistant. Reply in the language the user writes in. Keep answers clear and reasonably short. Never claim to have done something you cannot do, and never invent live facts such as weather, news or prices.';
+  var store={
+    get:function(k,def){try{var v=localStorage.getItem(k);return v===null?def:v}catch(e){return def}},
+    set:function(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
+  };
+  var history=[];
+  try{history=JSON.parse(store.get('zoya.history','[]'))||[]}catch(e){history=[]}
+  var busy=false,ctrl=null;
+
+  // theme
+  function applyTheme(m){document.documentElement.setAttribute('data-theme',m)}
+  var theme=store.get('zoya.theme',matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  applyTheme(theme);
+  $('theme').onclick=function(){theme=theme==='dark'?'light':'dark';applyTheme(theme);store.set('zoya.theme',theme)};
+
+  function save(){store.set('zoya.history',JSON.stringify(history))}
+  function bubble(cls,text){var e=document.createElement('div');e.className='m '+cls;e.textContent=text;msgsEl.appendChild(e);msgsEl.scrollTop=msgsEl.scrollHeight;return e}
+  function render(){
+    msgsEl.innerHTML='';
+    if(!history.length){
+      msgsEl.innerHTML='<div class="empty"><b>Hi, I\'m ZOYA.</b>Type a message below to start. Add your Gemini API key in Settings first.</div>';
+      return;
+    }
+    history.forEach(function(m){bubble(m.role==='user'?'user':'ai',m.text)});
+  }
+  function setBusy(b){busy=b;send.textContent=b?'Stop':'Send';send.setAttribute('aria-label',b?'Stop generating':'Send message')}
+  function grow(){t.style.height='auto';t.style.height=Math.min(t.scrollHeight,140)+'px'}
+  t.addEventListener('input',grow);
+  t.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&matchMedia('(hover:hover)').matches){e.preventDefault();$('f').requestSubmit()}});
+
+  function explain(status,body){
+    var m='';try{m=JSON.parse(body).error.message||''}catch(e){}
+    if(status===400&&/api key/i.test(m))return 'Configuration error: the API key is not valid. Check it in Settings.';
+    if(status===400)return 'Request rejected by Gemini: '+(m||'bad request')+' Check the model name in Settings.';
+    if(status===401||status===403)return 'Configuration error: this key is not allowed to use Gemini. Check the key in Settings.';
+    if(status===404)return 'Model not found. Enter a current Gemini model name in Settings.';
+    if(status===429)return 'Rate limit reached. Wait a moment and try again.';
+    if(status>=500)return 'Gemini is having trouble (error '+status+'). Try again shortly.';
+    return 'Gemini returned error '+status+(m?': '+m:'.');
+  }
+
+  async function ask(){
+    var text=t.value.trim();
+    if(!text)return; // empty message safely rejected
+    var key=store.get('zoya.key','').trim();
+    if(!key){bubble('err','Configuration needed: add your Gemini API key in Settings.');d.showModal();return}
+    var model=store.get('zoya.model',DEFAULT_MODEL).trim()||DEFAULT_MODEL;
+    var empty=msgsEl.querySelector('.empty');if(empty)msgsEl.innerHTML='';
+    history.push({role:'user',text:text});bubble('user',text);
+    t.value='';grow();
+    var out=bubble('ai','');out.classList.add('dots');
+    setBusy(true);ctrl=new AbortController();
+    var got='',failed=null;
+    try{
+      var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse',{
+        method:'POST',signal:ctrl.signal,
+        headers:{'Content-Type':'application/json','x-goog-api-key':key},
+        body:JSON.stringify({
+          systemInstruction:{parts:[{text:SYSTEM}]},
+          contents:history.map(function(m){return{role:m.role,parts:[{text:m.text}]}})
+        })
+      });
+      if(!r.ok){failed=explain(r.status,await r.text())}
+      else{
+        var rd=r.body.getReader(),dec=new TextDecoder(),buf='',block=null;
+        for(;;){
+          var c=await rd.read();if(c.done)break;
+          buf+=dec.decode(c.value,{stream:true});
+          var lines=buf.split(/\r?\n/);buf=lines.pop();
+          for(var i=0;i<lines.length;i++){
+            if(lines[i].indexOf('data:')!==0)continue;
+            var j;try{j=JSON.parse(lines[i].slice(5))}catch(e){continue}
+            if(j.promptFeedback&&j.promptFeedback.blockReason)block=j.promptFeedback.blockReason;
+            var cand=j.candidates&&j.candidates[0];
+            if(cand&&cand.content&&cand.content.parts)cand.content.parts.forEach(function(p){if(p.text){got+=p.text;out.classList.remove('dots');out.textContent=got;msgsEl.scrollTop=msgsEl.scrollHeight}});
+          }
+        }
+        if(!got)failed=block?'Gemini blocked this request ('+block+'). Try rephrasing.':'Gemini returned an empty response. Try again.';
+      }
+    }catch(e){
+      if(e.name==='AbortError'){if(!got)failed=null}
+      else failed=navigator.onLine?'Could not reach Gemini. Check your connection and key restrictions, then try again.':'You are offline. Connect to the internet and try again.';
+    }
+    setBusy(false);ctrl=null;
+    if(got){history.push({role:'model',text:got});if(out.classList.contains('dots'))out.classList.remove('dots');save()}
+    else{
+      out.remove();history.pop(); // drop the unanswered user message so history stays valid
+      t.value=text;grow();
+      if(failed)bubble('err',failed);else bubble('note','Stopped.');
+    }
+    if(got&&failed===null&&ctrl===null){save()}
+  }
+
+  $('f').addEventListener('submit',function(e){
+    e.preventDefault();
+    if(busy){if(ctrl)ctrl.abort();return}
+    ask();
+  });
+  $('clear').onclick=function(){
+    if(busy&&ctrl)ctrl.abort();
+    if(history.length&&!confirm('Clear this conversation?'))return;
+    history=[];save();render();
+  };
+  $('cfg').onclick=function(){$('key').value=store.get('zoya.key','');$('model').value=store.get('zoya.model',DEFAULT_MODEL);$('vmodel').value=store.get('zoya.vmodel',VMODEL);d.showModal()};
+  $('cancel').onclick=function(){d.close()};
+  $('save').onclick=function(){
+    var ok=store.set('zoya.key',$('key').value.trim())&store.set('zoya.model',$('model').value.trim()||DEFAULT_MODEL)&store.set('zoya.vmodel',$('vmodel').value.trim()||VMODEL);
+    if(!ok){alert('This browser blocked saving settings (private mode or storage disabled).');return}
+    d.close();
+  };
+  // ===== Stage 2: voice (Gemini Live) + real tools =====
+  var VMODEL='gemini-3.1-flash-live-preview';
+  var VSYS='You are ZOYA, a friendly voice assistant developed by Tanim. Speak naturally in 1-3 short sentences. Reply in the language the user speaks (Bangla, English, Hindi, Hinglish, Urdu, Tagalog). Use tools for time, math, weather, notes and reminders, and Google Search for current facts. Never say an action succeeded unless the tool result says so. You cannot open other apps or control the phone; say so if asked. Do not claim human feelings.';
+  var DECL=[
+    {name:'get_time',description:'Current date, time and timezone of the user device.'},
+    {name:'calculate',description:'Evaluate an arithmetic expression.',parameters:{type:'OBJECT',properties:{expression:{type:'STRING'}},required:['expression']}},
+    {name:'add_note',description:'Save a note for the user.',parameters:{type:'OBJECT',properties:{text:{type:'STRING'}},required:['text']}},
+    {name:'list_notes',description:'List the saved notes.'},
+    {name:'set_reminder',description:'Remind the user after some minutes. Works only while ZOYA stays open.',parameters:{type:'OBJECT',properties:{minutes:{type:'NUMBER'},text:{type:'STRING'}},required:['minutes','text']}},
+    {name:'get_weather',description:'Current weather for a city, or for the device location when no city is given.',parameters:{type:'OBJECT',properties:{city:{type:'STRING'}}}}
+  ];
+  var TOOLS={
+    get_time:function(){var n=new Date();return{iso:n.toISOString(),local:n.toLocaleString(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone}},
+    calculate:function(a){var x=String(a.expression||'');if(!/^[0-9+\-*\/().%\s^]+$/.test(x))return{error:'Unsupported expression'};try{var r=Function('"use strict";return ('+x.replace(/\^/g,'**')+')')();return isFinite(r)?{result:r}:{error:'Not a finite number'}}catch(e){return{error:'Could not calculate'}}},
+    add_note:function(a){var n=[];try{n=JSON.parse(store.get('zoya.notes','[]'))}catch(e){}n.push({text:String(a.text||''),at:new Date().toISOString()});return store.set('zoya.notes',JSON.stringify(n))?{saved:true,total:n.length}:{error:'Browser blocked saving'}},
+    list_notes:function(){try{return{notes:JSON.parse(store.get('zoya.notes','[]'))}}catch(e){return{notes:[]}}},
+    set_reminder:async function(a){
+      var m=Number(a.minutes);if(!(m>0&&m<=1440))return{error:'minutes must be between 0 and 1440'};
+      var txt=String(a.text||'Reminder'),ok=false;
+      if('Notification' in window){try{ok=(Notification.permission==='granted'?'granted':await Notification.requestPermission())==='granted'}catch(e){}}
+      setTimeout(function(){bubble('note','Reminder: '+txt);try{navigator.vibrate&&navigator.vibrate(300)}catch(e){}if(ok){try{new Notification('ZOYA reminder',{body:txt})}catch(e){}}},m*60000);
+      return{scheduled:true,in_minutes:m,note:'Shown inside ZOYA while it stays open. Background notifications are not available yet.'};
+    },
+    get_weather:async function(a){
+      var city=String(a.city||'').trim(),lat,lon,name=city;
+      if(city){var g=await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name='+encodeURIComponent(city))).json();if(!g.results||!g.results[0])return{error:'City not found'};lat=g.results[0].latitude;lon=g.results[0].longitude;name=g.results[0].name}
+      else{var p=await new Promise(function(ok,no){navigator.geolocation.getCurrentPosition(ok,no,{timeout:10000})}).catch(function(){return null});if(!p)return{error:'Location not available; ask the user for a city name'};lat=p.coords.latitude;lon=p.coords.longitude;name='device location'}
+      var w=await (await fetch('https://api.open-meteo.com/v1/forecast?current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,wind_speed_10m,weather_code&latitude='+lat+'&longitude='+lon)).json();
+      return w.current?{place:name,current:w.current,units:w.current_units}:{error:'Weather service returned no data'};
+    }
+  };
+  var V={state:'IDLE',ws:null,mic:null,ctx:null,out:null,src:null,proc:null,nextT:0,srcs:[],reconn:0,want:false,ready:false,done:true,cur:{user:null,ai:null}};
+  var vs=$('vs'),diag=$('diag'),micBtn=$('mic'),DEV=location.hash==='#dev';
+  if(DEV)diag.hidden=false;
+  function log(tag,msg){if(!DEV)return;var l=document.createElement('div');l.textContent=tag+' '+msg;diag.appendChild(l);while(diag.childNodes.length>40)diag.removeChild(diag.firstChild);diag.scrollTop=diag.scrollHeight}
+  var LABEL={IDLE:'Mic off',REQUESTING_PERMISSION:'Asking for microphone…',CONNECTING:'Connecting…',LISTENING:'Listening',THINKING:'Thinking…',SPEAKING:'Speaking. Talk to interrupt.',PERMISSION_DENIED:'Microphone permission denied. Allow it in Chrome site settings.',CONNECTION_ERROR:'Connection lost.',AUTH_ERROR:'API key rejected.',AUDIO_ERROR:'Audio problem.',MODEL_ERROR:'Model error.'};
+  var ERR=/^(PERMISSION_DENIED|CONNECTION_ERROR|AUTH_ERROR|AUDIO_ERROR|MODEL_ERROR)$/;
+  function setState(s,extra){V.state=s;vs.textContent=LABEL[s]+(extra?' '+extra:'');vs.hidden=(s==='IDLE'&&!extra);micBtn.classList.toggle('on',s!=='IDLE'&&!ERR.test(s));log('STATE',s+(extra?' '+extra:''))}
+  function b64(buf){var u=new Uint8Array(buf),s='';for(var i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)}
+  function tr(role,text){
+    var e=msgsEl.querySelector('.empty');if(e)msgsEl.innerHTML='';
+    if(role==='user'&&V.cur.ai)V.cur.ai=null;
+    if(role==='ai'&&V.cur.user)V.cur.user=null;
+    if(!V.cur[role])V.cur[role]=bubble(role==='user'?'user':'ai','');
+    V.cur[role].textContent+=text;msgsEl.scrollTop=msgsEl.scrollHeight;
+  }
+  function flush(){V.srcs.forEach(function(x){x.onended=null;try{x.stop()}catch(e){}});V.srcs=[];V.nextT=0}
+  function idleCheck(){if(V.done&&!V.srcs.length&&V.state==='SPEAKING')setState('LISTENING')}
+  function play(data){
+    var bin=atob(data),n=bin.length>>1,f=new Float32Array(n);
+    for(var i=0;i<n;i++){var v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8);if(v>=32768)v-=65536;f[i]=v/32768}
+    var buf=V.out.createBuffer(1,n,24000);buf.copyToChannel(f,0);
+    var x=V.out.createBufferSource();x.buffer=buf;x.connect(V.out.destination);
+    V.nextT=Math.max(V.nextT,V.out.currentTime);x.start(V.nextT);V.nextT+=buf.duration;
+    V.srcs.push(x);x.onended=function(){V.srcs=V.srcs.filter(function(y){return y!==x});idleCheck()};
+    V.done=false;if(V.state!=='SPEAKING'){setState('SPEAKING');log('AUDIO_OUTPUT','first chunk')}
+  }
+  function stopVoice(reason,final){
+    log('CLEANUP','mic stop reason: '+reason);V.want=false;V.ready=false;flush();
+    try{V.proc&&V.proc.disconnect();V.src&&V.src.disconnect()}catch(e){}
+    try{V.mic&&V.mic.getTracks().forEach(function(t){t.stop()})}catch(e){}
+    try{V.ctx&&V.ctx.close();V.out&&V.out.close()}catch(e){}
+    var w=V.ws;V.ws=null;try{w&&w.close()}catch(e){}
+    V.mic=V.ctx=V.out=V.src=V.proc=null;V.cur={user:null,ai:null};
+    final?setState(final.s,final.x):setState('IDLE');
+  }
+  function connect(){
+    var key=store.get('zoya.key','').trim(),model=store.get('zoya.vmodel',VMODEL).trim()||VMODEL;
+    setState('CONNECTING');V.ready=false;
+    var ws=new WebSocket('wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key='+encodeURIComponent(key));
+    V.ws=ws;
+    ws.onopen=function(){log('LIVE_SESSION','socket open');ws.send(JSON.stringify({setup:{model:'models/'+model,generationConfig:{responseModalities:['AUDIO']},systemInstruction:{parts:[{text:VSYS}]},tools:[{functionDeclarations:DECL},{googleSearch:{}}],inputAudioTranscription:{},outputAudioTranscription:{}}}))};
+    ws.onmessage=async function(ev){if(ws!==V.ws)return;var t2=typeof ev.data==='string'?ev.data:await ev.data.text();var m;try{m=JSON.parse(t2)}catch(e){return}handle(m)};
+    ws.onerror=function(){log('ERROR','websocket error')};
+    ws.onclose=function(ev){
+      if(ws!==V.ws)return;V.ready=false;var r=(ev.reason||'').slice(0,140);log('LIVE_SESSION','closed '+ev.code+' '+r);
+      if(!V.want)return;
+      if(/api key|api_key|unauthenticated|permission/i.test(r))return stopVoice('auth failure',{s:'AUTH_ERROR',x:r});
+      if(ev.code===1007||ev.code===1008)return stopVoice('server rejected session',{s:'MODEL_ERROR',x:r||('code '+ev.code)});
+      if(V.reconn<3){V.reconn++;log('LIVE_SESSION','reconnect '+V.reconn);setState('CONNECTING','(retry '+V.reconn+')');setTimeout(function(){if(V.want&&ws===V.ws)connect()},1000*V.reconn)}
+      else stopVoice('connection lost after retries',{s:'CONNECTION_ERROR',x:r});
+    };
+  }
+  function handle(m){
+    if(m.setupComplete){V.ready=true;V.reconn=0;setState('LISTENING');return}
+    var sc=m.serverContent;
+    if(sc){
+      if(sc.interrupted){log('BARGE_IN','interrupted');flush();V.cur.ai=null;V.done=true;setState('LISTENING')}
+      if(sc.modelTurn&&sc.modelTurn.parts)sc.modelTurn.parts.forEach(function(p){if(p.inlineData&&p.inlineData.data)play(p.inlineData.data)});
+      if(sc.inputTranscription&&sc.inputTranscription.text)tr('user',sc.inputTranscription.text);
+      if(sc.outputTranscription&&sc.outputTranscription.text)tr('ai',sc.outputTranscription.text);
+      if(sc.turnComplete){log('GEMINI_EVENT','turnComplete');V.done=true;V.cur={user:null,ai:null};idleCheck()}
+    }
+    if(m.toolCall){setState('THINKING');runTools(m.toolCall.functionCalls||[])}
+  }
+  async function runTools(calls){
+    var res=[];
+    for(var i=0;i<calls.length;i++){
+      var c=calls[i],o;log('GEMINI_EVENT','tool '+c.name);
+      try{o=TOOLS[c.name]?await TOOLS[c.name](c.args||{}):{error:'Unknown tool'}}catch(e){o={error:'Tool failed: '+(e&&e.message||e)}}
+      res.push({id:c.id,name:c.name,response:{output:o}});
+    }
+    if(V.ws&&V.ws.readyState===1)V.ws.send(JSON.stringify({toolResponse:{functionResponses:res}}));
+  }
+  async function startVoice(){
+    var key=store.get('zoya.key','').trim();
+    if(!key){bubble('err','Configuration needed: add your Gemini API key in Settings.');d.showModal();return}
+    var AC=window.AudioContext||window.webkitAudioContext;
+    if(!window.isSecureContext||!navigator.mediaDevices||!window.WebSocket||!AC){setState('AUDIO_ERROR','LIMITED ON THIS BROWSER: voice needs HTTPS and a modern browser.');return}
+    if(busy&&ctrl)ctrl.abort();
+    V.want=true;V.reconn=0;setState('REQUESTING_PERMISSION');
+    try{V.mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});log('MIC_PERMISSION','granted')}
+    catch(e){log('MIC_PERMISSION',e.name);return stopVoice('permission request failed',e.name==='NotAllowedError'?{s:'PERMISSION_DENIED'}:{s:'AUDIO_ERROR',x:e.name})}
+    try{
+      V.ctx=new AC({sampleRate:16000});V.out=new AC({sampleRate:24000});
+      await V.ctx.resume();await V.out.resume();
+      V.src=V.ctx.createMediaStreamSource(V.mic);V.proc=V.ctx.createScriptProcessor(4096,1,1);
+      V.proc.onaudioprocess=function(e){
+        if(!V.ready||!V.ws||V.ws.readyState!==1)return;
+        var f=e.inputBuffer.getChannelData(0),b=new Int16Array(f.length);
+        for(var i=0;i<f.length;i++)b[i]=Math.max(-1,Math.min(1,f[i]))*32767;
+        V.ws.send(JSON.stringify({realtimeInput:{audio:{data:b64(b.buffer),mimeType:'audio/pcm;rate=16000'}}}));
+      };
+      V.src.connect(V.proc);V.proc.connect(V.ctx.destination);log('AUDIO_CAPTURE','started');
+    }catch(e){log('ERROR',String(e));return stopVoice('audio setup failed',{s:'AUDIO_ERROR',x:String(e&&e.message||e)})}
+    V.mic.getTracks().forEach(function(t){t.onended=function(){if(V.want)stopVoice('microphone track ended (device disconnected?)',{s:'AUDIO_ERROR',x:'Microphone disconnected.'})}});
+    connect();
+  }
+  micBtn.onclick=function(){if(V.state==='IDLE'||ERR.test(V.state))startVoice();else stopVoice('user tapped mic')};
+  window.addEventListener('pagehide',function(){if(V.want)stopVoice('page closed')});
+  render();
+})();
+</script>
+</body>
+</html>
